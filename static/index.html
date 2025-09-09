@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Bet Code Converter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --accent:#22c55e; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: linear-gradient(180deg, #0b1220, #0f172a); color: var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; }
+    .card { width:100%; max-width:420px; background:var(--card); border-radius:16px; padding:24px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    h1 { margin:0 0 8px; font-size:22px; }
+    p.sub { margin:0 0 16px; opacity:.8; font-size:14px; }
+    label { display:block; margin:12px 0 6px; font-size:13px; opacity:.9; }
+    input, select { width:100%; padding:12px; border:1px solid #374151; background:#0b1020; color:var(--text); border-radius:10px; outline:none; }
+    button { width:100%; margin-top:16px; padding:12px; border:none; border-radius:10px; background:var(--accent); color:#062a12; font-weight:700; cursor:pointer; }
+    .result { margin-top:16px; padding:12px; background:#0b1020; border:1px solid #1f2937; border-radius:10px; font-size:14px; }
+    .muted { opacity:.8; font-size:12px; margin-top:10px; }
+    .ok { color:#22c55e; }
+    .err { color:#f87171; }
+    .row { display:flex; gap:10px; }
+    .row > div { flex:1; }
+    .legs { margin-top:8px; font-size:13px; line-height:1.4; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#1f2937; font-size:12px; margin-left:6px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Bet Code Converter</h1>
+    <p class="sub">Paste a code and convert between SportyBet and Bet9ja (demo mode).</p>
+
+    <label for="code">Booking Code</label>
+    <input id="code" placeholder="Try SP12345 or BJ99999" />
+
+    <div class="row">
+      <div>
+        <label for="from">From</label>
+        <select id="from">
+          <option value="sportybet">SportyBet</option>
+          <option value="bet9ja">Bet9ja</option>
+        </select>
+      </div>
+      <div>
+        <label for="to">To</label>
+        <select id="to">
+          <option value="bet9ja">Bet9ja</option>
+          <option value="sportybet">SportyBet</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="btn">Convert</button>
+
+    <div id="out" class="result" style="display:none;"></div>
+    <div class="muted">Note: This MVP uses demo data. We’ll plug in real fetching/mapping next.</div>
+  </div>
+
+  <script>
+    const out = document.getElementById('out');
+    document.getElementById('btn').addEventListener('click', async () => {
+      out.style.display = 'block';
+      out.textContent = 'Converting...';
+      try {
+        const code = document.getElementById('code').value.trim();
+        const from_platform = document.getElementById('from').value;
+        const to_platform = document.getElementById('to').value;
+        const res = await fetch('/api/convert', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ code, from_platform, to_platform })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          const legs = (data.preview?.legs || []).map(
+            (l, i) => `• ${l.home} vs ${l.away} — ${l.market} (${l.pick}) @ ${l.odds}`
+          ).join('<br>');
+          out.innerHTML = `
+            <div class="ok">✅ ${data.message}</div>
+            <div class="badge">Converted Code</div> <strong>${data.converted_code}</strong>
+            <div class="legs">${legs}</div>
+          `;
+        } else {
+          out.innerHTML = `<div class="err">❌ ${data.message}</div>`;
+        }
+      } catch (e) {
+        out.innerHTML = `<div class="err">❌ Network error. Please try again.</div>`;
+      }
+    });
+  </script>
+</body>
+  </html>
