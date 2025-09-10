@@ -64,7 +64,7 @@
         const code = document.getElementById('code').value.trim();
         const from_platform = document.getElementById('from').value;
         const to_platform = document.getElementById('to').value;
-        const res = await fetch('/api/convert', {
+        const res = await fetch('https://code-converter-b5qi.onrender.com/api/convert', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ code, from_platform, to_platform })
