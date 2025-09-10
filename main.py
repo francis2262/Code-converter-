@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve the frontend
+# Serve the frontend (make sure "static" folder exists or comment this out)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 # --- Simple MVP conversion logic ---
@@ -25,31 +25,29 @@ class ConvertRequest(BaseModel):
     to_platform:   Literal["sportybet", "bet9ja"]
 
 # A tiny demo dictionary to prove end-to-end flow.
-# Later we’ll replace this with real parsing / scraping / mapping.
 SAMPLE_CODES = {
     # SportyBet -> slip structure (fake demo)
     "SP12345": {"legs": [
-        {"home": "Arsenal", "away":"Chelsea", "market":"1X2", "pick":"HOME", "odds":1.85},
-        {"home": "Man Utd","away":"Liverpool","market":"GG","pick":"YES","odds":1.70}
+        {"home": "Arsenal", "away": "Chelsea", "market": "1X2", "pick": "HOME", "odds": 1.85},
+        {"home": "Man Utd", "away": "Liverpool", "market": "GG", "pick": "YES", "odds": 1.70}
     ]},
     # Bet9ja -> slip structure (fake demo)
     "BJ99999": {"legs": [
-        {"home": "Barcelona","away":"Real Madrid","market":"O/U 2.5","pick":"OVER","odds":1.95}
+        {"home": "Barcelona", "away": "Real Madrid", "market": "O/U 2.5", "pick": "OVER", "odds": 1.95}
     ]}
 }
 
-# Market name mapping (very small to start—expand later)
+# Market name mapping
 MARKET_MAP = {
-    ("sportybet","1X2"): "Match Result",
-    ("sportybet","GG"): "Both Teams To Score",
-    ("sportybet","O/U 2.5"): "Over/Under 2.5 Goals",
-    ("bet9ja","Match Result"): "1X2",
-    ("bet9ja","Both Teams To Score"): "GG",
-    ("bet9ja","Over/Under 2.5 Goals"): "O/U 2.5",
+    ("sportybet", "1X2"): "Match Result",
+    ("sportybet", "GG"): "Both Teams To Score",
+    ("sportybet", "O/U 2.5"): "Over/Under 2.5 Goals",
+    ("bet9ja", "Match Result"): "1X2",
+    ("bet9ja", "Both Teams To Score"): "GG",
+    ("bet9ja", "Over/Under 2.5 Goals"): "O/U 2.5",
 }
 
 def fake_convert_slip(slip: dict, from_plat: str, to_plat: str) -> dict:
-    # For MVP we keep teams/odds the same and only “rename” markets where we can.
     legs_out = []
     for leg in slip.get("legs", []):
         market_in = leg.get("market", "")
@@ -59,7 +57,6 @@ def fake_convert_slip(slip: dict, from_plat: str, to_plat: str) -> dict:
     return {"legs": legs_out}
 
 def fake_generate_code(to_plat: str, source_code: str) -> str:
-    # Deterministic but obviously fake; replace later with real booking-code creation.
     prefix = "BJ" if to_plat == "bet9ja" else "SP"
     return f"{prefix}{abs(hash(source_code)) % 100000:05d}"
 
@@ -73,7 +70,6 @@ def convert(req: ConvertRequest):
             "preview": None
         }
 
-    # Get slip by code (demo dictionary). In real life: fetch/scrape/parse by booking code.
     slip = SAMPLE_CODES.get(req.code)
     if not slip:
         return {
