@@ -3,10 +3,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Literal
+import httpx
+import re
 
 app = FastAPI()
 
-# Allow browser calls (safe defaults)
+# Allow browser calls
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,21 +20,20 @@ app.add_middleware(
 # Serve the frontend
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
+# ---- Request schema ----
 class ConvertRequest(BaseModel):
     code: str
     from_platform: Literal["sportybet", "bet9ja"]
     to_platform: Literal["sportybet", "bet9ja"]
 
+# ---- Demo dataset ----
 SAMPLE_CODES = {
-    "SP12345": {"legs": [
-        {"home": "Arsenal", "away": "Chelsea", "market": "1X2", "pick": "HOME", "odds": 1.85},
-        {"home": "Man Utd", "away": "Liverpool", "market": "GG", "pick": "YES", "odds": 1.70}
-    ]},
     "BJ99999": {"legs": [
         {"home": "Barcelona", "away": "Real Madrid", "market": "O/U 2.5", "pick": "OVER", "odds": 1.95}
     ]}
 }
 
+# ---- Market mapping ----
 MARKET_MAP = {
     ("sportybet", "1X2"): "Match Result",
     ("sportybet", "GG"): "Both Teams To Score",
@@ -42,6 +43,29 @@ MARKET_MAP = {
     ("bet9ja", "Over/Under 2.5 Goals"): "O/U 2.5",
 }
 
+# ---- SportyBet Fetch ----
+async def fetch_sportybet_slip(code: str) -> dict:
+    url = f"https://www.sportybet.com/ng/m/sporty/booking?bookingCode={code}"
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, timeout=15.0)
+        if r.status_code != 200:
+            return None
+        text = r.text
+
+        # Very rough parsing (for MVP)
+        matches = re.findall(r'>(.*?) vs (.*?)<', text)
+        slip = {"legs": []}
+        for home, away in matches:
+            slip["legs"].append({
+                "home": home.strip(),
+                "away": away.strip(),
+                "market": "Unknown",
+                "pick": "?",
+                "odds": None
+            })
+        return slip if slip["legs"] else None
+
+# ---- Conversion logic ----
 def fake_convert_slip(slip: dict, from_plat: str, to_plat: str) -> dict:
     legs_out = []
     for leg in slip.get("legs", []):
@@ -56,18 +80,23 @@ def fake_generate_code(to_plat: str, source_code: str) -> str:
     return f"{prefix}{abs(hash(source_code)) % 100000:05d}"
 
 @app.post("/api/convert")
-def convert(req: ConvertRequest):
+async def convert(req: ConvertRequest):
     if req.from_platform == req.to_platform:
         return {"ok": False, "message": "From/To platforms are the same.", "converted_code": None, "preview": None}
 
-    slip = SAMPLE_CODES.get(req.code)
+    slip = None
+    if req.from_platform == "sportybet":
+        slip = await fetch_sportybet_slip(req.code)
+    elif req.code in SAMPLE_CODES:
+        slip = SAMPLE_CODES[req.code]
+
     if not slip:
-        return {"ok": False, "message": "Code not found in demo dataset. Try SP12345 or BJ99999.", "converted_code": None, "preview": None}
+        return {"ok": False, "message": "Code not found or could not fetch.", "converted_code": None, "preview": None}
 
     preview = fake_convert_slip(slip, req.from_platform, req.to_platform)
     converted_code = fake_generate_code(req.to_platform, req.code)
 
-    return {"ok": True, "message": "Converted (demo).", "converted_code": converted_code, "preview": preview}
+    return {"ok": True, "message": "Converted (with fetch).", "converted_code": converted_code, "preview": preview}
 
 @app.get("/api/health")
 def health():
