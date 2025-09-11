@@ -3,12 +3,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Literal
-import httpx
-import re
+from playwright.sync_api import sync_playwright
 
 app = FastAPI()
 
-# Allow browser calls
+# Allow browser calls (safe defaults)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,20 +19,12 @@ app.add_middleware(
 # Serve the frontend
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-# ---- Request schema ----
 class ConvertRequest(BaseModel):
     code: str
     from_platform: Literal["sportybet", "bet9ja"]
     to_platform: Literal["sportybet", "bet9ja"]
 
-# ---- Demo dataset ----
-SAMPLE_CODES = {
-    "BJ99999": {"legs": [
-        {"home": "Barcelona", "away": "Real Madrid", "market": "O/U 2.5", "pick": "OVER", "odds": 1.95}
-    ]}
-}
-
-# ---- Market mapping ----
+# Market name mapping
 MARKET_MAP = {
     ("sportybet", "1X2"): "Match Result",
     ("sportybet", "GG"): "Both Teams To Score",
@@ -43,29 +34,24 @@ MARKET_MAP = {
     ("bet9ja", "Over/Under 2.5 Goals"): "O/U 2.5",
 }
 
-# ---- SportyBet Fetch ----
-async def fetch_sportybet_slip(code: str) -> dict:
-    url = f"https://www.sportybet.com/ng/m/sporty/booking?bookingCode={code}"
-    async with httpx.AsyncClient() as client:
-        r = await client.get(url, timeout=15.0)
-        if r.status_code != 200:
-            return None
-        text = r.text
+def fetch_sportybet_slip(code: str) -> dict:
+    """Scrape a real slip from SportyBet using Playwright"""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        url = f"https://www.sportybet.com/ng/m/sporty-code-share/{code}"
+        page.goto(url, timeout=60000)
 
-        # Very rough parsing (for MVP)
-        matches = re.findall(r'>(.*?) vs (.*?)<', text)
-        slip = {"legs": []}
-        for home, away in matches:
-            slip["legs"].append({
-                "home": home.strip(),
-                "away": away.strip(),
-                "market": "Unknown",
-                "pick": "?",
-                "odds": None
-            })
-        return slip if slip["legs"] else None
+        # Wait until slip container loads
+        page.wait_for_selector("div.share-bet-slip", timeout=60000)
 
-# ---- Conversion logic ----
+        # Extract slip text (basic example)
+        slip_text = page.inner_text("div.share-bet-slip")
+
+        browser.close()
+
+        return {"raw_text": slip_text}
+
 def fake_convert_slip(slip: dict, from_plat: str, to_plat: str) -> dict:
     legs_out = []
     for leg in slip.get("legs", []):
@@ -80,23 +66,23 @@ def fake_generate_code(to_plat: str, source_code: str) -> str:
     return f"{prefix}{abs(hash(source_code)) % 100000:05d}"
 
 @app.post("/api/convert")
-async def convert(req: ConvertRequest):
+def convert(req: ConvertRequest):
     if req.from_platform == req.to_platform:
         return {"ok": False, "message": "From/To platforms are the same.", "converted_code": None, "preview": None}
 
-    slip = None
     if req.from_platform == "sportybet":
-        slip = await fetch_sportybet_slip(req.code)
-    elif req.code in SAMPLE_CODES:
-        slip = SAMPLE_CODES[req.code]
+        slip = fetch_sportybet_slip(req.code)
+    else:
+        return {"ok": False, "message": "Only sportybet scraping is implemented for now.", "converted_code": None, "preview": None}
 
-    if not slip:
-        return {"ok": False, "message": "Code not found or could not fetch.", "converted_code": None, "preview": None}
-
-    preview = fake_convert_slip(slip, req.from_platform, req.to_platform)
     converted_code = fake_generate_code(req.to_platform, req.code)
 
-    return {"ok": True, "message": "Converted (with fetch).", "converted_code": converted_code, "preview": preview}
+    return {
+        "ok": True,
+        "message": "Converted from real SportyBet.",
+        "converted_code": converted_code,
+        "preview": slip
+    }
 
 @app.get("/api/health")
 def health():
