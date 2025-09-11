@@ -32,7 +32,21 @@ SAMPLE_CODES = {
         {"home": "Man Utd", "away": "Liverpool", "market": "GG", "pick": "YES", "odds": 1.70}
     ]},
     # Bet9ja -> slip structure (fake demo)
-    "BJ99999": {"legs": [
+    "BJ99999": {"legs": [from playwright.async_api import async_playwright
+import asyncio
+
+@app.get("/api/test-scrape")
+async def test_scrape():
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto("https://www.sportybet.com/ng/m/sport/football")
+            title = await page.title()
+            await browser.close()
+        return {"ok": True, "title": title}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
         {"home": "Barcelona", "away": "Real Madrid", "market": "O/U 2.5", "pick": "OVER", "odds": 1.95}
     ]}
 }
