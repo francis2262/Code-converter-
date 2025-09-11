@@ -3,10 +3,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Literal
+from playwright.sync_api import sync_playwright
 
 app = FastAPI()
 
-# Allow browser calls (safe defaults)
+# Allow browser calls
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,43 +16,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve the frontend (make sure "static" folder exists or comment this out)
+# Serve static frontend
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-# --- Simple MVP conversion logic ---
+# --- Conversion Logic ---
 class ConvertRequest(BaseModel):
     code: str
     from_platform: Literal["sportybet", "bet9ja"]
-    to_platform:   Literal["sportybet", "bet9ja"]
+    to_platform: Literal["sportybet", "bet9ja"]
 
-# A tiny demo dictionary to prove end-to-end flow.
 SAMPLE_CODES = {
-    # SportyBet -> slip structure (fake demo)
     "SP12345": {"legs": [
         {"home": "Arsenal", "away": "Chelsea", "market": "1X2", "pick": "HOME", "odds": 1.85},
         {"home": "Man Utd", "away": "Liverpool", "market": "GG", "pick": "YES", "odds": 1.70}
     ]},
-    # Bet9ja -> slip structure (fake demo)
-    "BJ99999": {"legs": [from playwright.async_api import async_playwright
-import asyncio
-
-@app.get("/api/test-scrape")
-async def test_scrape():
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            await page.goto("https://www.sportybet.com/ng/m/sport/football")
-            title = await page.title()
-            await browser.close()
-        return {"ok": True, "title": title}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    "BJ99999": {"legs": [
         {"home": "Barcelona", "away": "Real Madrid", "market": "O/U 2.5", "pick": "OVER", "odds": 1.95}
     ]}
 }
 
-# Market name mapping
 MARKET_MAP = {
     ("sportybet", "1X2"): "Match Result",
     ("sportybet", "GG"): "Both Teams To Score",
@@ -103,6 +86,16 @@ def convert(req: ConvertRequest):
         "preview": preview
     }
 
+# --- Health Check ---
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+# --- Playwright Test Scrape ---
+@app.get("/api/test-scrape")
+def test_scrape():
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto("
