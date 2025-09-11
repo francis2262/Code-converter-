@@ -3,11 +3,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Literal
-from playwright.sync_api import sync_playwright
 
 app = FastAPI()
 
-# Allow browser calls
+# Allow browser calls (safe defaults)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,10 +15,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static frontend
+# Serve the frontend
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-# --- Conversion Logic ---
 class ConvertRequest(BaseModel):
     code: str
     from_platform: Literal["sportybet", "bet9ja"]
@@ -60,42 +58,17 @@ def fake_generate_code(to_plat: str, source_code: str) -> str:
 @app.post("/api/convert")
 def convert(req: ConvertRequest):
     if req.from_platform == req.to_platform:
-        return {
-            "ok": False,
-            "message": "From/To platforms are the same.",
-            "converted_code": None,
-            "preview": None
-        }
+        return {"ok": False, "message": "From/To platforms are the same.", "converted_code": None, "preview": None}
 
     slip = SAMPLE_CODES.get(req.code)
     if not slip:
-        return {
-            "ok": False,
-            "message": "Code not found in demo dataset. Try SP12345 or BJ99999.",
-            "converted_code": None,
-            "preview": None
-        }
+        return {"ok": False, "message": "Code not found in demo dataset. Try SP12345 or BJ99999.", "converted_code": None, "preview": None}
 
     preview = fake_convert_slip(slip, req.from_platform, req.to_platform)
     converted_code = fake_generate_code(req.to_platform, req.code)
 
-    return {
-        "ok": True,
-        "message": "Converted (demo).",
-        "converted_code": converted_code,
-        "preview": preview
-    }
+    return {"ok": True, "message": "Converted (demo).", "converted_code": converted_code, "preview": preview}
 
-# --- Health Check ---
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
-
-# --- Playwright Test Scrape ---
-@app.get("/api/test-scrape")
-def test_scrape():
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto("
