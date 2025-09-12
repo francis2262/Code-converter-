@@ -1,8 +1,41 @@
 <!DOCTYPE html>
 <html>
-<head><title>Code Converter</title></head>
+<head>
+  <title>Code Converter wisdom</title>
+</head>
 <body>
-  <h1>Welcome</h1>
-  <p><a href="/test.html">Open test page</a></p>
+  <h1>Deep Search Converter</h1>
+  <form onsubmit="convertCode(event)">
+    <input id="code" placeholder="Enter code (SP12345)" />
+    <select id="from">
+      <option value="sportybet">Sportybet</option>
+      <option value="bet9ja">Bet9ja</option>
+    </select>
+    →
+    <select id="to">
+      <option value="bet9ja">Bet9ja</option>
+      <option value="sportybet">Sportybet</option>
+    </select>
+    <button type="submit">Convert</button>
+  </form>
+  <pre id="result"></pre>
+
+  <p><a href="/chat.html">Go to Chat</a></p>
+
+  <script>
+    async function convertCode(e) {
+      e.preventDefault();
+      let code = document.getElementById("code").value;
+      let from = document.getElementById("from").value;
+      let to = document.getElementById("to").value;
+      let res = await fetch("/api/convert", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({code, from_platform: from, to_platform: to})
+      });
+      let data = await res.json();
+      document.getElementById("result").innerText = JSON.stringify(data, null, 2);
+    }
+  </script>
 </body>
 </html>
