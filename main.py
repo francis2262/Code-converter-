@@ -2,12 +2,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Literal
-from playwright.sync_api import sync_playwright
+from typing import Literal, List
 
 app = FastAPI()
 
-# Allow browser calls (safe defaults)
+# Allow frontend calls
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,15 +15,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve the frontend
+# Serve frontend
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
+# -------- Deep Search Demo --------
 class ConvertRequest(BaseModel):
     code: str
     from_platform: Literal["sportybet", "bet9ja"]
     to_platform: Literal["sportybet", "bet9ja"]
 
-# Market name mapping
+SAMPLE_CODES = {
+    "SP12345": {"legs": [
+        {"home": "Arsenal", "away": "Chelsea", "market": "1X2", "pick": "HOME", "odds": 1.85},
+        {"home": "Man Utd", "away": "Liverpool", "market": "GG", "pick": "YES", "odds": 1.70}
+    ]},
+    "BJ99999": {"legs": [
+        {"home": "Barcelona", "away": "Real Madrid", "market": "O/U 2.5", "pick": "OVER", "odds": 1.95}
+    ]}
+}
+
 MARKET_MAP = {
     ("sportybet", "1X2"): "Match Result",
     ("sportybet", "GG"): "Both Teams To Score",
@@ -33,24 +42,6 @@ MARKET_MAP = {
     ("bet9ja", "Both Teams To Score"): "GG",
     ("bet9ja", "Over/Under 2.5 Goals"): "O/U 2.5",
 }
-
-def fetch_sportybet_slip(code: str) -> dict:
-    """Scrape a real slip from SportyBet using Playwright"""
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        url = f"https://www.sportybet.com/ng/m/sporty-code-share/{code}"
-        page.goto(url, timeout=60000)
-
-        # Wait until slip container loads
-        page.wait_for_selector("div.share-bet-slip", timeout=60000)
-
-        # Extract slip text (basic example)
-        slip_text = page.inner_text("div.share-bet-slip")
-
-        browser.close()
-
-        return {"raw_text": slip_text}
 
 def fake_convert_slip(slip: dict, from_plat: str, to_plat: str) -> dict:
     legs_out = []
@@ -70,20 +61,31 @@ def convert(req: ConvertRequest):
     if req.from_platform == req.to_platform:
         return {"ok": False, "message": "From/To platforms are the same.", "converted_code": None, "preview": None}
 
-    if req.from_platform == "sportybet":
-        slip = fetch_sportybet_slip(req.code)
-    else:
-        return {"ok": False, "message": "Only sportybet scraping is implemented for now.", "converted_code": None, "preview": None}
+    slip = SAMPLE_CODES.get(req.code)
+    if not slip:
+        return {"ok": False, "message": "Code not found in demo dataset. Try SP12345 or BJ99999.", "converted_code": None, "preview": None}
 
+    preview = fake_convert_slip(slip, req.from_platform, req.to_platform)
     converted_code = fake_generate_code(req.to_platform, req.code)
 
-    return {
-        "ok": True,
-        "message": "Converted from real SportyBet.",
-        "converted_code": converted_code,
-        "preview": slip
-    }
+    return {"ok": True, "message": "Converted (demo).", "converted_code": converted_code, "preview": preview}
 
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+# -------- Chat System --------
+class ChatMessage(BaseModel):
+    user: str
+    text: str
+
+chat_history: List[ChatMessage] = []
+
+@app.post("/api/chat/send")
+def send_message(msg: ChatMessage):
+    chat_history.append(msg)
+    return {"ok": True, "message": "sent"}
+
+@app.get("/api/chat/history")
+def get_history():
+    return {"ok": True, "messages": chat_history}
