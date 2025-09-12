@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Community Chat</title>
+</head>
+<body>
+  <h2>Community Chat</h2>
+  <input id="user" placeholder="Your name" /><br/>
+  <textarea id="msg" placeholder="Type a message"></textarea><br/>
+  <button onclick="sendMsg()">Send</button>
+  <h3>Messages:</h3>
+  <div id="chatbox"></div>
+
+  <script>
+    async function loadChat() {
+      let res = await fetch('/api/chat/history');
+      let data = await res.json();
+      let box = document.getElementById('chatbox');
+      box.innerHTML = '';
+      data.messages.forEach(m => {
+        box.innerHTML += `<p><b>${m.user}:</b> ${m.text}</p>`;
+      });
+    }
+
+    async function sendMsg() {
+      let user = document.getElementById('user').value;
+      let text = document.getElementById('msg').value;
+      await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({user, text})
+      });
+      document.getElementById('msg').value = '';
+      loadChat();
+    }
+
+    setInterval(loadChat, 3000); // refresh every 3s
+    loadChat();
+  </script>
+</body>
+</html>
