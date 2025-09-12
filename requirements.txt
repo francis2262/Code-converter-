@@ -1,4 +1,2 @@
-fastapi==0.110.0
-uvicorn==0.29.0
-pydantic==1.10.13
-playwright==1.47.0
+fastapi
+uvicorn
